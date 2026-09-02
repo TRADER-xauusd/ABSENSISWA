@@ -7,6 +7,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <!-- QuaggaJS untuk scan barcode -->
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -119,6 +121,60 @@
             padding: 20px;
             text-align: center;
         }
+        .scanner-box #scannerVideo {
+            width: 100%;
+            max-width: 400px;
+            height: 300px;
+            background: #000;
+            border-radius: 8px;
+            margin: 0 auto;
+            overflow: hidden;
+            position: relative;
+        }
+        .scanner-box #scannerVideo video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .scanner-box #scannerVideo .overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 80px;
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            border-radius: 10px;
+            pointer-events: none;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.1);
+        }
+        .scanner-box #scannerVideo .overlay .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: #4fc3f7;
+            border-style: solid;
+            border-width: 0;
+        }
+        .scanner-box #scannerVideo .overlay .corner.tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-radius: 4px 0 0 0; }
+        .scanner-box #scannerVideo .overlay .corner.tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-radius: 0 4px 0 0; }
+        .scanner-box #scannerVideo .overlay .corner.bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-radius: 0 0 0 4px; }
+        .scanner-box #scannerVideo .overlay .corner.br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-radius: 0 0 4px 0; }
+        .scanner-box #scannerVideo .scan-line {
+            position: absolute;
+            top: 0;
+            left: 10%;
+            width: 80%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #4fc3f7, transparent);
+            animation: scanMove 2s ease-in-out infinite;
+            box-shadow: 0 0 20px rgba(79, 195, 247, 0.5);
+        }
+        @keyframes scanMove {
+            0% { top: 10%; }
+            50% { top: 85%; }
+            100% { top: 10%; }
+        }
         .scanner-box .placeholder {
             width: 100%;
             max-width: 400px;
@@ -132,13 +188,6 @@
             color: #888;
             margin: 0 auto;
             flex-direction: column;
-        }
-        .scanner-box video {
-            width: 100%;
-            max-width: 400px;
-            border-radius: 8px;
-            background: #000;
-            display: none;
         }
         .scanner-box .status {
             margin-top: 15px;
@@ -182,6 +231,7 @@
             font-size: 14px;
             width: 200px;
             background: #fff;
+            color: #333;
         }
         .manual-input input:focus { outline: none; border-color: #1a237e; }
         .manual-input button {
@@ -391,13 +441,13 @@
         @media (max-width: 768px) {
             .header h1 { font-size: 18px; }
             .stats-grid { grid-template-columns: 1fr 1fr; }
-            .scanner-box video { max-width: 100%; }
             .big-notification { padding: 30px 20px; }
             .big-notification .name { font-size: 24px; }
             .big-notification .status-text { font-size: 20px; }
         }
         @media (max-width: 480px) {
             .stats-grid { grid-template-columns: 1fr; }
+            .scanner-box #scannerVideo { height: 200px; }
         }
     </style>
 </head>
@@ -445,11 +495,19 @@
             <div class="scanner-container">
                 <div class="scanner-box">
                     <h4 style="color:#fff;margin-bottom:10px;">📷 Scan Barcode Siswa</h4>
-                    <div id="scannerPlaceholder" class="placeholder">
-                        <div style="font-size:50px;">📷</div>
-                        <p>Klik tombol Start untuk scan</p>
+                    <div id="scannerVideo">
+                        <div class="placeholder" id="scannerPlaceholder">
+                            <div style="font-size:50px;">📷</div>
+                            <p>Klik Start untuk scan</p>
+                        </div>
+                        <div class="overlay" id="scannerOverlay" style="display:none;">
+                            <div class="corner tl"></div>
+                            <div class="corner tr"></div>
+                            <div class="corner bl"></div>
+                            <div class="corner br"></div>
+                            <div class="scan-line"></div>
+                        </div>
                     </div>
-                    <video id="scannerVideo" autoplay playsinline></video>
                     <div id="scanStatus" class="status info">🔍 Siap scan</div>
                     <button class="btn-scan" id="btnScan" onclick="toggleScanner()">📷 Start Scan</button>
                     
@@ -590,8 +648,8 @@ try {
 let siswaList = [];
 let absenHariIni = [];
 let isScanning = false;
-let stream = null;
 let selectedUID = null;
+let quaggaInitialized = false;
 
 // ============================================================
 // INIT
@@ -782,21 +840,21 @@ function updateLastAbsen() {
 }
 
 // ============================================================
-// SCANNER
+// SCANNER - MENGGUNAKAN QUAGGAJS
 // ============================================================
-async function toggleScanner() {
+function toggleScanner() {
     const btn = document.getElementById('btnScan');
-    const video = document.getElementById('scannerVideo');
-    const placeholder = document.getElementById('scannerPlaceholder');
     const status = document.getElementById('scanStatus');
+    const placeholder = document.getElementById('scannerPlaceholder');
+    const overlay = document.getElementById('scannerOverlay');
     
     if (isScanning) {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            stream = null;
+        // Stop scanner
+        if (typeof Quagga !== 'undefined') {
+            Quagga.stop();
         }
-        video.style.display = 'none';
         placeholder.style.display = 'flex';
+        overlay.style.display = 'none';
         isScanning = false;
         btn.textContent = '📷 Start Scan';
         btn.className = 'btn-scan';
@@ -805,26 +863,98 @@ async function toggleScanner() {
         return;
     }
     
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' } 
-        });
-        video.srcObject = stream;
-        video.style.display = 'block';
-        placeholder.style.display = 'none';
-        isScanning = true;
-        btn.textContent = '⏹️ Stop Scan';
-        btn.className = 'btn-scan stop';
+    // Start scanner
+    if (typeof Quagga === 'undefined') {
+        status.className = 'status error';
+        status.textContent = '❌ Library scanner tidak tersedia';
+        showToast('❌ Library scanner tidak tersedia', 'error');
+        return;
+    }
+    
+    placeholder.style.display = 'none';
+    overlay.style.display = 'block';
+    isScanning = true;
+    btn.textContent = '⏹️ Stop Scan';
+    btn.className = 'btn-scan stop';
+    status.className = 'status info';
+    status.textContent = '📷 Mengaktifkan kamera...';
+    
+    // Inisialisasi Quagga
+    Quagga.init({
+        inputStream: {
+            type: "LiveStream",
+            target: document.querySelector('#scannerVideo'),
+            constraints: {
+                facingMode: "environment",
+                width: { ideal: 400 },
+                height: { ideal: 300 }
+            }
+        },
+        decoder: {
+            readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "code_93_reader", "upc_reader", "upc_e_reader"]
+        }
+    }, function(err) {
+        if (err) {
+            console.error('Quagga init error:', err);
+            status.className = 'status error';
+            status.textContent = '❌ Gagal akses kamera: ' + err.message;
+            isScanning = false;
+            btn.textContent = '📷 Start Scan';
+            btn.className = 'btn-scan';
+            placeholder.style.display = 'flex';
+            overlay.style.display = 'none';
+            showToast('❌ Gagal akses kamera: ' + err.message, 'error');
+            return;
+        }
+        
+        Quagga.start();
         status.className = 'status info';
         status.textContent = '📷 Arahkan ke barcode...';
         
-        // Simulasi scan - fokus ke input manual
-        document.getElementById('manualUID').focus();
-    } catch(e) {
-        status.className = 'status error';
-        status.textContent = '❌ Gagal akses kamera: ' + e.message;
-        showToast('❌ Gagal akses kamera', 'error');
-    }
+        // Deteksi barcode
+        Quagga.onDetected(function(result) {
+            const code = result.codeResult.code;
+            console.log('Barcode detected:', code);
+            
+            // Cari siswa dengan UID tersebut
+            const siswa = siswaList.find(s => s.uid === code);
+            if (siswa) {
+                // Cek sudah absen
+                const sudahAbsen = absenHariIni.find(a => a.uid === code);
+                if (sudahAbsen) {
+                    status.className = 'status warning';
+                    status.textContent = `⚠️ ${siswa.nama} sudah absen pukul ${sudahAbsen.waktu}`;
+                    showToast(`⚠️ ${siswa.nama} sudah absen`, 'error');
+                    // Vibrate jika support
+                    if (navigator.vibrate) navigator.vibrate(200);
+                    return;
+                }
+                
+                // Tampilkan pilihan status
+                selectedUID = code;
+                document.getElementById('statusButtons').style.display = 'flex';
+                status.className = 'status warning';
+                status.textContent = `📝 Pilih status untuk ${siswa.nama}`;
+                
+                // Vibrate
+                if (navigator.vibrate) navigator.vibrate(100);
+                
+                // Stop scanner sementara
+                Quagga.stop();
+                isScanning = false;
+                btn.textContent = '📷 Start Scan';
+                btn.className = 'btn-scan';
+                
+                document.getElementById('statusButtons').scrollIntoView({ behavior: 'smooth' });
+                
+            } else {
+                status.className = 'status error';
+                status.textContent = `❌ UID ${code} tidak ditemukan`;
+                showToast(`❌ UID ${code} tidak ditemukan`, 'error');
+                if (navigator.vibrate) navigator.vibrate(300);
+            }
+        });
+    });
 }
 
 // ============================================================
@@ -837,7 +967,6 @@ function manualAbsen() {
         return;
     }
     
-    // Cari siswa
     const siswa = siswaList.find(s => s.uid === uid);
     if (!siswa) {
         showToast('❌ Siswa dengan UID ' + uid + ' tidak ditemukan', 'error');
@@ -845,7 +974,6 @@ function manualAbsen() {
         return;
     }
     
-    // Cek sudah absen
     const sudahAbsen = absenHariIni.find(a => a.uid === uid);
     if (sudahAbsen) {
         showToast('⚠️ ' + siswa.nama + ' sudah absen pukul ' + sudahAbsen.waktu, 'error');
@@ -853,12 +981,10 @@ function manualAbsen() {
         return;
     }
     
-    // Tampilkan pilihan status
     selectedUID = uid;
     document.getElementById('statusButtons').style.display = 'flex';
     document.getElementById('scanStatus').className = 'status warning';
     document.getElementById('scanStatus').textContent = `📝 Pilih status untuk ${siswa.nama}`;
-    
     document.getElementById('statusButtons').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -1095,6 +1221,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 console.log('📚 Admin Panel Loaded!');
+console.log('📷 Scanner menggunakan QuaggaJS');
 </script>
 </body>
 </html>
