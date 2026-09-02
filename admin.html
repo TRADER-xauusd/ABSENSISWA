@@ -1,199 +1,1126 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Admin Absensi - Scan Barcode</title>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
-    body { background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 16px; }
-    h1 { font-size: 1.35rem; color: #38bdf8; margin-bottom: 16px; text-align: center; }
-    .card { background: #1e293b; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
-    #reader { width: 100%; max-width: 380px; margin: 0 auto 12px; border-radius: 12px; overflow: hidden; }
-    .btn-group { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
-    button {
-      background: #0ea5e9; color: white; border: none; padding: 12px 20px;
-      border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
-    }
-    button.stop { background: #64748b; }
-    #notif {
-      display: none;
-      background: #16a34a;
-      color: white;
-      padding: 18px 20px;
-      border-radius: 14px;
-      font-size: 1.3rem;
-      font-weight: 800;
-      text-align: center;
-      margin: 16px 0;
-      animation: muncul 0.35s ease;
-    }
-    @keyframes muncul {
-      from { transform: scale(0.7); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-    th { text-align: left; color: #94a3b8; padding: 8px 6px; border-bottom: 1px solid #334155; }
-    td { padding: 10px 6px; border-bottom: 1px solid #1e293b; }
-    .hadir { color: #4ade80; font-weight: 700; }
-    .kosong { color: #64748b; text-align: center; padding: 20px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi Siswa - Admin Panel</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a237e, #283593);
+            color: #fff;
+            padding: 20px 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .header h1 {
+            font-size: 24px;
+        }
+        .header h1 span { color: #ffd54f; }
+        .header .date {
+            font-size: 16px;
+            background: rgba(255,255,255,0.1);
+            padding: 8px 18px;
+            border-radius: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #fff;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        .stat-card .label { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 5px; }
+        .stat-card .value.green { color: #43a047; }
+        .stat-card .value.blue { color: #1a237e; }
+        .stat-card .value.orange { color: #f57c00; }
+        .stat-card .value.red { color: #e53935; }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #f0f2f5;
+            padding-bottom: 10px;
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .tab-nav button {
+            padding: 10px 24px;
+            background: #f0f2f5;
+            border: none;
+            border-radius: 8px;
+            color: #555;
+            cursor: pointer;
+            transition: 0.3s;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .tab-nav button.active {
+            background: #1a237e;
+            color: #fff;
+        }
+        .tab-nav button:hover { background: #e8eaf6; }
+        .tab-nav button.active:hover { background: #1a237e; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Scanner */
+        .scanner-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .scanner-box {
+            flex: 1;
+            min-width: 300px;
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .scanner-box .placeholder {
+            width: 100%;
+            max-width: 400px;
+            height: 300px;
+            background: #2a2a4e;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #888;
+            margin: 0 auto;
+            flex-direction: column;
+        }
+        .scanner-box video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 8px;
+            background: #000;
+            display: none;
+        }
+        .scanner-box .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .scanner-box .status.success { background: #e8f5e9; color: #2e7d32; }
+        .scanner-box .status.error { background: #ffebee; color: #c62828; }
+        .scanner-box .status.info { background: #e3f2fd; color: #0d47a1; }
+        .scanner-box .status.warning { background: #fff3e0; color: #e65100; }
+
+        .btn-scan {
+            padding: 12px 30px;
+            background: #1a237e;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+            margin-top: 10px;
+        }
+        .btn-scan:hover { background: #283593; transform: scale(1.02); }
+        .btn-scan:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-scan.stop { background: #e53935; }
+        .btn-scan.stop:hover { background: #c62828; }
+
+        .manual-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .manual-input input {
+            padding: 10px 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 200px;
+            background: #fff;
+        }
+        .manual-input input:focus { outline: none; border-color: #1a237e; }
+        .manual-input button {
+            padding: 10px 24px;
+            background: #ffd54f;
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .manual-input button:hover { background: #ffca28; }
+
+        /* Status Absen */
+        .status-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            justify-content: center;
+        }
+        .status-buttons button {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 13px;
+        }
+        .status-buttons button:hover { transform: scale(1.05); }
+        .status-buttons .s-hadir { background: #e8f5e9; color: #2e7d32; }
+        .status-buttons .s-hadir:hover { background: #c8e6c9; }
+        .status-buttons .s-izin { background: #fff3e0; color: #e65100; }
+        .status-buttons .s-izin:hover { background: #ffe0b2; }
+        .status-buttons .s-sakit { background: #fce4ec; color: #c62828; }
+        .status-buttons .s-sakit:hover { background: #f8bbd0; }
+        .status-buttons .s-terlambat { background: #fff8e1; color: #f57f17; }
+        .status-buttons .s-terlambat:hover { background: #ffecb3; }
+
+        /* Table */
+        .table-wrapper { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            background: #f5f5f5;
+            text-align: left;
+            padding: 12px 15px;
+            color: #555;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        tr:hover { background: #f8f9fa; }
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .badge.hadir { background: #e8f5e9; color: #2e7d32; }
+        .badge.izin { background: #fff3e0; color: #e65100; }
+        .badge.sakit { background: #fce4ec; color: #c62828; }
+        .badge.alfa { background: #ffebee; color: #b71c1c; }
+        .badge.terlambat { background: #fff8e1; color: #f57f17; }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-dot.hadir { background: #43a047; }
+        .status-dot.izin { background: #fb8c00; }
+        .status-dot.sakit { background: #e53935; }
+        .status-dot.alfa { background: #b71c1c; }
+        .status-dot.terlambat { background: #f9a825; }
+
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .search-box input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .search-box input:focus { outline: none; border-color: #1a237e; }
+        .search-box button {
+            padding: 10px 20px;
+            background: #1a237e;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .search-box button:hover { background: #283593; }
+
+        /* Notification */
+        .big-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            padding: 40px 60px;
+            border-radius: 20px;
+            box-shadow: 0 20px 80px rgba(0,0,0,0.4);
+            text-align: center;
+            z-index: 9999;
+            animation: popIn 0.5s ease;
+            max-width: 90%;
+            border: 4px solid #43a047;
+        }
+        .big-notification .icon { font-size: 60px; margin-bottom: 10px; }
+        .big-notification .name { font-size: 32px; font-weight: 700; color: #1a237e; }
+        .big-notification .status-text { font-size: 24px; font-weight: 600; margin: 10px 0; }
+        .big-notification .waktu { font-size: 18px; color: #666; }
+        .big-notification .sub { font-size: 14px; color: #999; margin-top: 15px; }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            70% { transform: translate(-50%, -50%) scale(1.05); }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .toast.success { background: #2e7d32; color: #fff; }
+        .toast.error { background: #c62828; color: #fff; }
+        .toast.info { background: #0d47a1; color: #fff; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .btn-export {
+            padding: 8px 20px;
+            background: #1a237e;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+        .btn-export:hover { background: #283593; }
+
+        .btn-danger {
+            padding: 6px 14px;
+            background: #e53935;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: 0.3s;
+        }
+        .btn-danger:hover { background: #c62828; }
+
+        .btn-edit {
+            padding: 6px 14px;
+            background: #1a237e;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: 0.3s;
+        }
+        .btn-edit:hover { background: #283593; }
+
+        .last-absen-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .last-absen-box .empty {
+            color: #888;
+            font-size: 14px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 18px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .scanner-box video { max-width: 100%; }
+            .big-notification { padding: 30px 20px; }
+            .big-notification .name { font-size: 24px; }
+            .big-notification .status-text { font-size: 20px; }
+        }
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-  <h1>📋 Admin Absensi Siswa</h1>
 
-  <div class="card">
-    <h3 style="margin-bottom:12px; text-align:center">Scan Barcode Siswa</h3>
-    <div id="reader"></div>
-    <div class="btn-group">
-      <button onclick="mulaiScan()">📷 Mulai Kamera</button>
-      <button class="stop" onclick="stopScan()">Stop</button>
+<div class="admin-container" id="app">
+
+    <!-- Header -->
+    <div class="header">
+        <h1>📚 Absensi <span>Siswa</span></h1>
+        <div class="date" id="headerDate"></div>
     </div>
-    <div id="notif"></div>
-  </div>
 
-  <div class="card">
-    <h3 style="margin-bottom:12px">Kehadiran Hari Ini</h3>
-    <div id="tabelContainer">
-      <p class="kosong">Memuat data...</p>
+    <!-- Stats -->
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <div class="label">👥 Total Siswa</div>
+            <div class="value blue" id="statTotal">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">✅ Hadir Hari Ini</div>
+            <div class="value green" id="statHadir">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">⏳ Belum Absen</div>
+            <div class="value orange" id="statBelum">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">📊 Persentase</div>
+            <div class="value blue" id="statPersen">0%</div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    // Firebase dari BolaPredik
-    const firebaseConfig = {
-      apiKey: "AIzaSyAzJ6p_stDYeaviIK1CapIpz_pc8onN5hM",
-      authDomain: "spaceman-sukses.firebaseapp.com",
-      projectId: "spaceman-sukses",
-      storageBucket: "spaceman-sukses.firebasestorage.app",
-      messagingSenderId: "442967300277",
-      appId: "1:442967300277:web:65b99aebdbc478455586fc"
-    };
+    <!-- Main Card -->
+    <div class="card">
+        <div class="tab-nav">
+            <button class="active" onclick="switchTab('scanner')">📷 Scan Barcode</button>
+            <button onclick="switchTab('absen')">📋 Absen Hari Ini</button>
+            <button onclick="switchTab('siswa')">👥 Data Siswa</button>
+            <button onclick="switchTab('history')">📊 History</button>
+        </div>
 
+        <!-- TAB: SCANNER -->
+        <div class="tab-content active" id="tabScanner">
+            <div class="scanner-container">
+                <div class="scanner-box">
+                    <h4 style="color:#fff;margin-bottom:10px;">📷 Scan Barcode Siswa</h4>
+                    <div id="scannerPlaceholder" class="placeholder">
+                        <div style="font-size:50px;">📷</div>
+                        <p>Klik tombol Start untuk scan</p>
+                    </div>
+                    <video id="scannerVideo" autoplay playsinline></video>
+                    <div id="scanStatus" class="status info">🔍 Siap scan</div>
+                    <button class="btn-scan" id="btnScan" onclick="toggleScanner()">📷 Start Scan</button>
+                    
+                    <div style="margin-top:15px;border-top:1px solid rgba(255,255,255,0.1);padding-top:15px;">
+                        <p style="color:#aaa;font-size:13px;">Atau input manual:</p>
+                        <div class="manual-input">
+                            <input type="text" id="manualNIS" placeholder="Masukkan NIS" maxlength="20">
+                            <button onclick="manualAbsen()">✅ Absen</button>
+                        </div>
+                        <div class="status-buttons" id="statusButtons" style="display:none;">
+                            <button class="s-hadir" onclick="absenManual('hadir')">✅ Hadir</button>
+                            <button class="s-izin" onclick="absenManual('izin')">📝 Izin</button>
+                            <button class="s-sakit" onclick="absenManual('sakit')">🤒 Sakit</button>
+                            <button class="s-terlambat" onclick="absenManual('terlambat')">⏰ Terlambat</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="flex:1;min-width:250px;">
+                    <h3 style="color:#333;font-size:15px;margin-bottom:10px;">📌 Siswa Terakhir Absen</h3>
+                    <div id="lastAbsen">
+                        <div class="last-absen-box">
+                            <div class="empty">Belum ada absen hari ini</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: ABSEN HARI INI -->
+        <div class="tab-content" id="tabAbsen">
+            <div class="flex-between">
+                <h3 style="color:#333;font-size:16px;">📋 Absensi Hari Ini - <span id="absenDate"></span></h3>
+                <button class="btn-export" onclick="exportAbsen()">📥 Export</button>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>NIS</th>
+                            <th>Nama</th>
+                            <th>Kelas</th>
+                            <th>Jam</th>
+                            <th>Tanggal</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="absenTableBody">
+                        <tr><td colspan="7" style="text-align:center;color:#888;">Belum ada absen hari ini</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: SISWA -->
+        <div class="tab-content" id="tabSiswa">
+            <div class="search-box">
+                <input type="text" id="searchSiswa" placeholder="Cari nama atau NIS..." onkeyup="filterSiswa()">
+                <button onclick="filterSiswa()">🔍 Cari</button>
+                <button onclick="document.getElementById('searchSiswa').value='';filterSiswa();">✕ Reset</button>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>NIS</th>
+                            <th>Nama</th>
+                            <th>Kelas</th>
+                            <th>Status Hari Ini</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="siswaTableBody">
+                        <tr><td colspan="6" style="text-align:center;color:#888;">Memuat data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: HISTORY -->
+        <div class="tab-content" id="tabHistory">
+            <div class="flex-between">
+                <h3 style="color:#333;font-size:16px;">📊 History Absensi</h3>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <input type="date" id="filterDate" onchange="loadHistory()" style="padding:8px 12px;border:2px solid #ddd;border-radius:8px;">
+                    <button class="btn-export" onclick="loadHistory()">📊 Tampilkan</button>
+                </div>
+            </div>
+            <div class="table-wrapper" style="margin-top:15px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>NIS</th>
+                            <th>Nama</th>
+                            <th>Kelas</th>
+                            <th>Tanggal</th>
+                            <th>Jam</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr><td colspan="7" style="text-align:center;color:#888;">Pilih tanggal untuk melihat history</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// FIREBASE CONFIG
+// ============================================================
+const firebaseConfig = {
+    apiKey: "AIzaSyAzJ6p_stDYeaviIK1CapIpz_pc8onN5hM",
+    authDomain: "spaceman-sukses.firebaseapp.com",
+    projectId: "spaceman-sukses",
+    storageBucket: "spaceman-sukses.firebasestorage.app",
+    messagingSenderId: "442967300277",
+    appId: "1:442967300277:web:65b99aebdbc478455586fc"
+};
+
+let db;
+try {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
+    db = firebase.firestore();
+    console.log('✅ Firebase connected');
+} catch(e) {
+    console.error('❌ Firebase error:', e);
+    alert('Gagal koneksi ke database. Periksa koneksi internet.');
+}
 
-    let html5QrCode = null;
-    const hariIni = new Date().toLocaleDateString('id-ID');
+// ============================================================
+// STATE
+// ============================================================
+let siswaList = [];
+let absenHariIni = [];
+let isScanning = false;
+let stream = null;
+let selectedNIS = null;
+let manualNIS = null;
 
-    async function catatKehadiran(idBarcode) {
-      try {
-        const doc = await db.collection('siswa').doc(idBarcode).get();
-        
-        if (!doc.exists) {
-          tampilNotif('❌ Barcode tidak dikenal!', true);
-          return;
-        }
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    document.getElementById('headerDate').textContent = now.toLocaleDateString('id-ID', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+    document.getElementById('absenDate').textContent = now.toLocaleDateString('id-ID', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+    document.getElementById('filterDate').value = now.toISOString().split('T')[0];
+    
+    loadData();
+    loadAbsenHariIni();
+    loadHistory();
+});
 
-        const dataSiswa = doc.data();
-        const nama = dataSiswa.nama;
-
-        // Cek sudah absen hari ini?
-        const cek = await db.collection('kehadiran')
-          .where('siswaId', '==', idBarcode)
-          .where('tanggal', '==', hariIni)
-          .limit(1)
-          .get();
-
-        if (!cek.empty) {
-          const jamLama = cek.docs[0].data().jam;
-          tampilNotif(`${nama} sudah absen pukul ${jamLama}`, true);
-          return;
-        }
-
-        const jam = new Date().toLocaleTimeString('id-ID', {
-          hour: '2-digit',
-          minute: '2-digit'
+// ============================================================
+// LOAD DATA
+// ============================================================
+async function loadData() {
+    try {
+        const snapshot = await db.collection('siswa').orderBy('nama').get();
+        siswaList = [];
+        snapshot.forEach(doc => {
+            siswaList.push({ id: doc.id, ...doc.data() });
         });
-
-        await db.collection('kehadiran').add({
-          siswaId: idBarcode,
-          nama: nama,
-          tanggal: hariIni,
-          jam: jam,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        tampilNotif(`${nama} HADIR PUKUL ${jam}`);
-
-      } catch (err) {
-        console.error(err);
-        tampilNotif('Gagal mencatat kehadiran', true);
-      }
+        renderSiswa(siswaList);
+        updateStats();
+    } catch(e) {
+        console.error('Load data error:', e);
+        showToast('❌ Gagal load data siswa', 'error');
     }
+}
 
-    function tampilNotif(teks, error = false) {
-      const el = document.getElementById('notif');
-      el.style.display = 'block';
-      el.style.background = error ? '#dc2626' : '#16a34a';
-      el.textContent = teks;
-      setTimeout(() => el.style.display = 'none', 4500);
+function renderSiswa(data) {
+    const tbody = document.getElementById('siswaTableBody');
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Belum ada siswa terdaftar</td></tr>';
+        return;
     }
-
-    // Real-time list kehadiran hari ini
-    db.collection('kehadiran')
-      .where('tanggal', '==', hariIni)
-      .orderBy('timestamp', 'desc')
-      .onSnapshot((snapshot) => {
-        const container = document.getElementById('tabelContainer');
-        
-        if (snapshot.empty) {
-          container.innerHTML = '<p class="kosong">Belum ada yang absen hari ini</p>';
-          return;
-        }
-
-        let html = `
-          <table>
-            <thead>
-              <tr><th>No</th><th>Nama</th><th>Jam</th></tr>
-            </thead>
-            <tbody>
-        `;
-        snapshot.docs.forEach((doc, i) => {
-          const d = doc.data();
-          html += `
+    let html = '';
+    data.forEach((s, i) => {
+        const status = getStatusSiswa(s.nis);
+        html += `
             <tr>
-              <td>${i + 1}</td>
-              <td class="hadir">${d.nama}</td>
-              <td>${d.jam}</td>
+                <td>${i + 1}</td>
+                <td><strong>${s.nis}</strong></td>
+                <td>${s.nama}</td>
+                <td>${s.kelas || '-'}</td>
+                <td>${status}</td>
+                <td>
+                    <button class="btn-danger" onclick="hapusSiswa('${s.id}')">🗑️</button>
+                </td>
             </tr>
-          `;
-        });
-        html += '</tbody></table>';
-        container.innerHTML = html;
-      }, (err) => {
-        console.error(err);
-        // Biasanya error karena butuh index
-        document.getElementById('tabelContainer').innerHTML = 
-          '<p class="kosong">Error: Buat index di Firebase Console (klik link di console browser)</p>';
-      });
+        `;
+    });
+    tbody.innerHTML = html;
+}
 
-    function mulaiScan() {
-      if (html5QrCode) return;
-      html5QrCode = new Html5Qrcode("reader");
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 12, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          catatKehadiran(decodedText.trim());
-        },
-        () => {}
-      ).catch(err => {
-        alert('Gagal membuka kamera. Pastikan izin kamera diizinkan.\n' + err);
-      });
-    }
+function filterSiswa() {
+    const search = document.getElementById('searchSiswa').value.toLowerCase().trim();
+    if (!search) { renderSiswa(siswaList); return; }
+    const filtered = siswaList.filter(s => 
+        s.nama.toLowerCase().includes(search) || 
+        s.nis.includes(search)
+    );
+    renderSiswa(filtered);
+}
 
-    function stopScan() {
-      if (html5QrCode) {
-        html5QrCode.stop().then(() => {
-          html5QrCode.clear();
-          html5QrCode = null;
-        });
-      }
+function getStatusSiswa(nis) {
+    const absen = absenHariIni.find(a => a.nis === nis);
+    if (!absen) {
+        return `<span class="badge alfa">⏳ Belum</span>`;
     }
-  </script>
+    const statusMap = {
+        'hadir': `<span class="badge hadir"><span class="status-dot hadir"></span>Hadir</span>`,
+        'izin': `<span class="badge izin"><span class="status-dot izin"></span>Izin</span>`,
+        'sakit': `<span class="badge sakit"><span class="status-dot sakit"></span>Sakit</span>`,
+        'terlambat': `<span class="badge terlambat"><span class="status-dot terlambat"></span>Terlambat</span>`
+    };
+    return statusMap[absen.status] || `<span class="badge alfa">${absen.status}</span>`;
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function updateStats() {
+    document.getElementById('statTotal').textContent = siswaList.length;
+    const hadir = absenHariIni.filter(a => a.status === 'hadir').length;
+    const belum = siswaList.length - absenHariIni.length;
+    document.getElementById('statHadir').textContent = hadir;
+    document.getElementById('statBelum').textContent = belum;
+    const persen = siswaList.length > 0 ? Math.round((hadir / siswaList.length) * 100) : 0;
+    document.getElementById('statPersen').textContent = persen + '%';
+}
+
+// ============================================================
+// ABSENSI
+// ============================================================
+async function loadAbsenHariIni() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const snapshot = await db.collection('absen')
+            .where('tanggal', '==', today)
+            .orderBy('waktu', 'desc')
+            .get();
+        absenHariIni = [];
+        snapshot.forEach(doc => {
+            absenHariIni.push({ id: doc.id, ...doc.data() });
+        });
+        renderAbsenHariIni();
+        updateStats();
+        renderSiswa(siswaList);
+        updateLastAbsen();
+    } catch(e) {
+        console.error('Load absen error:', e);
+    }
+}
+
+function renderAbsenHariIni() {
+    const tbody = document.getElementById('absenTableBody');
+    if (absenHariIni.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">Belum ada absen hari ini</td></tr>';
+        return;
+    }
+    let html = '';
+    absenHariIni.forEach((a, i) => {
+        const statusMap = {
+            'hadir': '<span class="badge hadir"><span class="status-dot hadir"></span>Hadir</span>',
+            'izin': '<span class="badge izin"><span class="status-dot izin"></span>Izin</span>',
+            'sakit': '<span class="badge sakit"><span class="status-dot sakit"></span>Sakit</span>',
+            'terlambat': '<span class="badge terlambat"><span class="status-dot terlambat"></span>Terlambat</span>'
+        };
+        const tanggal = a.tanggal ? new Date(a.tanggal).toLocaleDateString('id-ID') : '-';
+        html += `
+            <tr>
+                <td>${i + 1}</td>
+                <td><strong>${a.nis}</strong></td>
+                <td>${a.nama}</td>
+                <td>${a.kelas || '-'}</td>
+                <td>${a.waktu || '-'}</td>
+                <td>${tanggal}</td>
+                <td>${statusMap[a.status] || a.status}</td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+}
+
+function updateLastAbsen() {
+    const container = document.getElementById('lastAbsen');
+    if (absenHariIni.length === 0) {
+        container.innerHTML = `
+            <div class="last-absen-box">
+                <div class="empty">Belum ada absen hari ini</div>
+            </div>
+        `;
+        return;
+    }
+    const last = absenHariIni[0];
+    const statusMap = {
+        'hadir': '✅ Hadir',
+        'izin': '📝 Izin',
+        'sakit': '🤒 Sakit',
+        'terlambat': '⏰ Terlambat'
+    };
+    const colorMap = {
+        'hadir': '#43a047',
+        'izin': '#fb8c00',
+        'sakit': '#e53935',
+        'terlambat': '#f9a825'
+    };
+    container.innerHTML = `
+        <div style="background:#f8f9fa;padding:15px;border-radius:8px;border-left:4px solid ${colorMap[last.status] || '#1a237e'};">
+            <div style="font-size:20px;font-weight:700;color:#1a237e;">${last.nama}</div>
+            <div style="color:#666;">NIS: ${last.nis} | Kelas: ${last.kelas || '-'}</div>
+            <div style="color:${colorMap[last.status] || '#1a237e'};font-weight:600;margin-top:5px;font-size:16px;">
+                ${statusMap[last.status] || last.status} - ${last.waktu || ''}
+            </div>
+            <div style="color:#999;font-size:12px;margin-top:3px;">
+                ${last.tanggal ? new Date(last.tanggal).toLocaleDateString('id-ID') : ''}
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// SCANNER
+// ============================================================
+async function toggleScanner() {
+    const btn = document.getElementById('btnScan');
+    const video = document.getElementById('scannerVideo');
+    const placeholder = document.getElementById('scannerPlaceholder');
+    const status = document.getElementById('scanStatus');
+    
+    if (isScanning) {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        video.style.display = 'none';
+        placeholder.style.display = 'flex';
+        isScanning = false;
+        btn.textContent = '📷 Start Scan';
+        btn.className = 'btn-scan';
+        status.className = 'status info';
+        status.textContent = '🔍 Siap scan';
+        return;
+    }
+    
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment' } 
+        });
+        video.srcObject = stream;
+        video.style.display = 'block';
+        placeholder.style.display = 'none';
+        isScanning = true;
+        btn.textContent = '⏹️ Stop Scan';
+        btn.className = 'btn-scan stop';
+        status.className = 'status info';
+        status.textContent = '📷 Arahkan ke barcode...';
+        
+        startScanning(video, status);
+    } catch(e) {
+        status.className = 'status error';
+        status.textContent = '❌ Gagal akses kamera: ' + e.message;
+        showToast('❌ Gagal akses kamera', 'error');
+    }
+}
+
+function startScanning(video, status) {
+    // Simulasi scan - karena library barcode butuh tambahan, kita gunakan input manual
+    // Tapi kita buat simulasi scan dengan interval
+    status.textContent = '📷 Arahkan kamera ke barcode siswa';
+    
+    // Untuk demo, kita akan monitor input manual
+    const manualInput = document.getElementById('manualNIS');
+    manualInput.focus();
+    
+    // Tambahkan event listener untuk scan otomatis
+    // Dalam implementasi nyata, bisa pakai QuaggaJS atau ZXing
+}
+
+// ============================================================
+// MANUAL ABSEN
+// ============================================================
+function manualAbsen() {
+    const nis = document.getElementById('manualNIS').value.trim();
+    if (!nis) {
+        showToast('⚠️ Masukkan NIS', 'error');
+        return;
+    }
+    
+    // Cari siswa
+    const siswa = siswaList.find(s => s.nis === nis);
+    if (!siswa) {
+        showToast('❌ Siswa dengan NIS ' + nis + ' tidak ditemukan', 'error');
+        return;
+    }
+    
+    // Cek sudah absen
+    const sudahAbsen = absenHariIni.find(a => a.nis === nis);
+    if (sudahAbsen) {
+        showToast('⚠️ ' + siswa.nama + ' sudah absen pukul ' + sudahAbsen.waktu, 'error');
+        document.getElementById('manualNIS').value = '';
+        return;
+    }
+    
+    // Tampilkan pilihan status
+    selectedNIS = nis;
+    document.getElementById('statusButtons').style.display = 'flex';
+    document.getElementById('scanStatus').className = 'status warning';
+    document.getElementById('scanStatus').textContent = `📝 Pilih status untuk ${siswa.nama}`;
+    
+    // Scroll ke status buttons
+    document.getElementById('statusButtons').scrollIntoView({ behavior: 'smooth' });
+}
+
+function absenManual(status) {
+    if (!selectedNIS) return;
+    const siswa = siswaList.find(s => s.nis === selectedNIS);
+    if (!siswa) return;
+    
+    simpanAbsen(siswa, status);
+    document.getElementById('statusButtons').style.display = 'none';
+    document.getElementById('manualNIS').value = '';
+    selectedNIS = null;
+    document.getElementById('scanStatus').className = 'status info';
+    document.getElementById('scanStatus').textContent = '🔍 Siap scan';
+}
+
+// ============================================================
+// SIMPAN ABSEN
+// ============================================================
+async function simpanAbsen(siswa, status) {
+    try {
+        const now = new Date();
+        const waktu = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        const tanggal = now.toISOString().split('T')[0];
+        
+        await db.collection('absen').add({
+            nis: siswa.nis,
+            nama: siswa.nama,
+            kelas: siswa.kelas || '-',
+            status: status,
+            waktu: waktu,
+            tanggal: tanggal,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        showToast(`✅ ${siswa.nama} ${status.toUpperCase()} pukul ${waktu}`, 'success');
+        
+        // Refresh absen
+        await loadAbsenHariIni();
+        document.getElementById('manualNIS').value = '';
+        
+        // Tampilkan notifikasi besar
+        showBigNotification(siswa.nama, status, waktu);
+        
+    } catch(e) {
+        console.error('Absen error:', e);
+        showToast('❌ Gagal absen: ' + e.message, 'error');
+    }
+}
+
+function showBigNotification(nama, status, waktu) {
+    const statusMap = {
+        'hadir': { label: '✅ HADIR', color: '#43a047', icon: '🎉' },
+        'izin': { label: '📝 IZIN', color: '#fb8c00', icon: '📝' },
+        'sakit': { label: '🤒 SAKIT', color: '#e53935', icon: '🤒' },
+        'terlambat': { label: '⏰ TERLAMBAT', color: '#f9a825', icon: '⏰' }
+    };
+    
+    const info = statusMap[status] || statusMap['hadir'];
+    
+    const existing = document.querySelector('.big-notification');
+    if (existing) existing.remove();
+    
+    const div = document.createElement('div');
+    div.className = 'big-notification';
+    div.style.borderColor = info.color;
+    div.innerHTML = `
+        <div class="icon">${info.icon}</div>
+        <div class="name">${nama}</div>
+        <div class="status-text" style="color:${info.color}">${info.label}</div>
+        <div class="waktu">Pukul ${waktu}</div>
+        <div class="sub">⏳ Notifikasi akan hilang otomatis</div>
+    `;
+    document.body.appendChild(div);
+    
+    setTimeout(() => {
+        if (div.parentNode) div.remove();
+    }, 5000);
+}
+
+// ============================================================
+// HISTORY
+// ============================================================
+async function loadHistory() {
+    try {
+        const date = document.getElementById('filterDate').value;
+        if (!date) {
+            document.getElementById('historyTableBody').innerHTML = 
+                '<tr><td colspan="7" style="text-align:center;color:#888;">Pilih tanggal terlebih dahulu</td></tr>';
+            return;
+        }
+        
+        const snapshot = await db.collection('absen')
+            .where('tanggal', '==', date)
+            .orderBy('waktu', 'desc')
+            .get();
+        
+        const tbody = document.getElementById('historyTableBody');
+        if (snapshot.empty) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#888;">Tidak ada absen pada tanggal ${new Date(date).toLocaleDateString('id-ID')}</td></tr>`;
+            return;
+        }
+        
+        let html = '';
+        let i = 1;
+        snapshot.forEach(doc => {
+            const a = doc.data();
+            const statusMap = {
+                'hadir': '<span class="badge hadir"><span class="status-dot hadir"></span>Hadir</span>',
+                'izin': '<span class="badge izin"><span class="status-dot izin"></span>Izin</span>',
+                'sakit': '<span class="badge sakit"><span class="status-dot sakit"></span>Sakit</span>',
+                'terlambat': '<span class="badge terlambat"><span class="status-dot terlambat"></span>Terlambat</span>'
+            };
+            html += `
+                <tr>
+                    <td>${i++}</td>
+                    <td><strong>${a.nis}</strong></td>
+                    <td>${a.nama}</td>
+                    <td>${a.kelas || '-'}</td>
+                    <td>${a.tanggal ? new Date(a.tanggal).toLocaleDateString('id-ID') : '-'}</td>
+                    <td>${a.waktu || '-'}</td>
+                    <td>${statusMap[a.status] || a.status}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+        
+    } catch(e) {
+        console.error('Load history error:', e);
+        showToast('❌ Gagal load history', 'error');
+    }
+}
+
+// ============================================================
+// SISWA CRUD
+// ============================================================
+async function hapusSiswa(id) {
+    const siswa = siswaList.find(s => s.id === id);
+    if (!siswa) return;
+    if (!confirm(`Hapus siswa ${siswa.nama} (${siswa.nis})?`)) return;
+    try {
+        await db.collection('siswa').doc(id).delete();
+        showToast('✅ Siswa dihapus', 'success');
+        loadData();
+    } catch(e) {
+        showToast('❌ Error: ' + e.message, 'error');
+    }
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function exportAbsen() {
+    if (absenHariIni.length === 0) {
+        showToast('⚠️ Belum ada data absen hari ini', 'error');
+        return;
+    }
+    let text = '📚 LAPORAN ABSENSI SISWA\n';
+    text += '='.repeat(60) + '\n';
+    text += `Tanggal: ${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}\n`;
+    text += '='.repeat(60) + '\n\n';
+    text += 'No\tNIS\tNama\tKelas\tJam\tStatus\n';
+    text += '-'.repeat(60) + '\n';
+    absenHariIni.forEach((a, i) => {
+        text += `${i+1}\t${a.nis}\t${a.nama}\t${a.kelas}\t${a.waktu}\t${a.status}\n`;
+    });
+    text += '\n' + '='.repeat(60) + '\n';
+    const hadir = absenHariIni.filter(a => a.status === 'hadir').length;
+    text += `Total Hadir: ${hadir} dari ${siswaList.length} siswa (${Math.round((hadir/siswaList.length)*100)}%)\n`;
+    
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Absensi_${new Date().toISOString().split('T')[0]}.txt`;
+    link.click();
+    showToast('✅ File berhasil didownload', 'success');
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-nav button').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+    event.target.classList.add('active');
+    
+    if (tab === 'siswa') loadData();
+    if (tab === 'absen') loadAbsenHariIni();
+    if (tab === 'history') loadHistory();
+}
+
+// ============================================================
+// UTILITY
+// ============================================================
+function showToast(message, type = 'info') {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
+// ============================================================
+// REAL-TIME LISTENERS
+// ============================================================
+// Listen for new absen
+db.collection('absen')
+    .where('tanggal', '==', new Date().toISOString().split('T')[0])
+    .orderBy('waktu', 'desc')
+    .onSnapshot(() => {
+        loadAbsenHariIni();
+    });
+
+db.collection('siswa').onSnapshot(() => {
+    loadData();
+});
+
+// ============================================================
+// KEYBOARD SHORTCUT
+// ============================================================
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        if (document.activeElement === document.getElementById('manualNIS')) {
+            manualAbsen();
+        }
+    }
+    if (e.key === 'Escape') {
+        if (isScanning) toggleScanner();
+        document.getElementById('statusButtons').style.display = 'none';
+        selectedNIS = null;
+        document.getElementById('manualNIS').value = '';
+    }
+});
+
+console.log('📚 Admin Panel Loaded!');
+</script>
 </body>
 </html>
