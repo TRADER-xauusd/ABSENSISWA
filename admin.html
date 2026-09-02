@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Admin Absensi - Scan Barcode</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 16px; }
+    h1 { font-size: 1.35rem; color: #38bdf8; margin-bottom: 16px; text-align: center; }
+    .card { background: #1e293b; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+    #reader { width: 100%; max-width: 380px; margin: 0 auto 12px; border-radius: 12px; overflow: hidden; }
+    .btn-group { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+    button {
+      background: #0ea5e9; color: white; border: none; padding: 12px 20px;
+      border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
+    }
+    button.stop { background: #64748b; }
+    #notif {
+      display: none;
+      background: #16a34a;
+      color: white;
+      padding: 18px 20px;
+      border-radius: 14px;
+      font-size: 1.3rem;
+      font-weight: 800;
+      text-align: center;
+      margin: 16px 0;
+      animation: muncul 0.35s ease;
+    }
+    @keyframes muncul {
+      from { transform: scale(0.7); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th { text-align: left; color: #94a3b8; padding: 8px 6px; border-bottom: 1px solid #334155; }
+    td { padding: 10px 6px; border-bottom: 1px solid #1e293b; }
+    .hadir { color: #4ade80; font-weight: 700; }
+    .kosong { color: #64748b; text-align: center; padding: 20px; }
+  </style>
+</head>
+<body>
+  <h1>📋 Admin Absensi Siswa</h1>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px; text-align:center">Scan Barcode Siswa</h3>
+    <div id="reader"></div>
+    <div class="btn-group">
+      <button onclick="mulaiScan()">📷 Mulai Kamera</button>
+      <button class="stop" onclick="stopScan()">Stop</button>
+    </div>
+    <div id="notif"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px">Kehadiran Hari Ini</h3>
+    <div id="tabelContainer">
+      <p class="kosong">Memuat data...</p>
+    </div>
+  </div>
+
+  <script>
+    // Firebase dari BolaPredik
+    const firebaseConfig = {
+      apiKey: "AIzaSyAzJ6p_stDYeaviIK1CapIpz_pc8onN5hM",
+      authDomain: "spaceman-sukses.firebaseapp.com",
+      projectId: "spaceman-sukses",
+      storageBucket: "spaceman-sukses.firebasestorage.app",
+      messagingSenderId: "442967300277",
+      appId: "1:442967300277:web:65b99aebdbc478455586fc"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let html5QrCode = null;
+    const hariIni = new Date().toLocaleDateString('id-ID');
+
+    async function catatKehadiran(idBarcode) {
+      try {
+        const doc = await db.collection('siswa').doc(idBarcode).get();
+        
+        if (!doc.exists) {
+          tampilNotif('❌ Barcode tidak dikenal!', true);
+          return;
+        }
+
+        const dataSiswa = doc.data();
+        const nama = dataSiswa.nama;
+
+        // Cek sudah absen hari ini?
+        const cek = await db.collection('kehadiran')
+          .where('siswaId', '==', idBarcode)
+          .where('tanggal', '==', hariIni)
+          .limit(1)
+          .get();
+
+        if (!cek.empty) {
+          const jamLama = cek.docs[0].data().jam;
+          tampilNotif(`${nama} sudah absen pukul ${jamLama}`, true);
+          return;
+        }
+
+        const jam = new Date().toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
+        await db.collection('kehadiran').add({
+          siswaId: idBarcode,
+          nama: nama,
+          tanggal: hariIni,
+          jam: jam,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        tampilNotif(`${nama} HADIR PUKUL ${jam}`);
+
+      } catch (err) {
+        console.error(err);
+        tampilNotif('Gagal mencatat kehadiran', true);
+      }
+    }
+
+    function tampilNotif(teks, error = false) {
+      const el = document.getElementById('notif');
+      el.style.display = 'block';
+      el.style.background = error ? '#dc2626' : '#16a34a';
+      el.textContent = teks;
+      setTimeout(() => el.style.display = 'none', 4500);
+    }
+
+    // Real-time list kehadiran hari ini
+    db.collection('kehadiran')
+      .where('tanggal', '==', hariIni)
+      .orderBy('timestamp', 'desc')
+      .onSnapshot((snapshot) => {
+        const container = document.getElementById('tabelContainer');
+        
+        if (snapshot.empty) {
+          container.innerHTML = '<p class="kosong">Belum ada yang absen hari ini</p>';
+          return;
+        }
+
+        let html = `
+          <table>
+            <thead>
+              <tr><th>No</th><th>Nama</th><th>Jam</th></tr>
+            </thead>
+            <tbody>
+        `;
+        snapshot.docs.forEach((doc, i) => {
+          const d = doc.data();
+          html += `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="hadir">${d.nama}</td>
+              <td>${d.jam}</td>
+            </tr>
+          `;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      }, (err) => {
+        console.error(err);
+        // Biasanya error karena butuh index
+        document.getElementById('tabelContainer').innerHTML = 
+          '<p class="kosong">Error: Buat index di Firebase Console (klik link di console browser)</p>';
+      });
+
+    function mulaiScan() {
+      if (html5QrCode) return;
+      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 12, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          catatKehadiran(decodedText.trim());
+        },
+        () => {}
+      ).catch(err => {
+        alert('Gagal membuka kamera. Pastikan izin kamera diizinkan.\n' + err);
+      });
+    }
+
+    function stopScan() {
+      if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+          html5QrCode = null;
+        });
+      }
+    }
+  </script>
+</body>
+</html>
