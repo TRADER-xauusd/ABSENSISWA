@@ -1,162 +1,562 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Absensi Siswa - Buat Barcode</title>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
-    body {
-      background: linear-gradient(135deg, #0f172a, #1e293b);
-      color: #e2e8f0;
-      min-height: 100vh;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    h1 { font-size: 1.5rem; margin-bottom: 6px; color: #38bdf8; text-align: center; }
-    .sub { color: #94a3b8; font-size: 0.9rem; margin-bottom: 24px; text-align: center; }
-    .card {
-      background: #1e293b;
-      border-radius: 20px;
-      padding: 28px 24px;
-      width: 100%;
-      max-width: 400px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-    label { display: block; margin-bottom: 8px; font-weight: 600; }
-    input {
-      width: 100%;
-      padding: 14px 16px;
-      border-radius: 12px;
-      border: 2px solid #334155;
-      background: #0f172a;
-      color: white;
-      font-size: 1.05rem;
-      margin-bottom: 18px;
-      outline: none;
-    }
-    input:focus { border-color: #0ea5e9; }
-    button {
-      width: 100%;
-      background: #0ea5e9;
-      color: white;
-      border: none;
-      padding: 16px;
-      border-radius: 12px;
-      font-size: 1.1rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    #hasil { display: none; margin-top: 28px; text-align: center; }
-    .nama-hasil { font-size: 1.3rem; font-weight: 700; color: #4ade80; margin-bottom: 4px; }
-    .id-kecil { font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
-    #barcode-container { background: white; padding: 16px; border-radius: 12px; display: inline-block; }
-    .petunjuk { margin-top: 16px; font-size: 0.9rem; color: #94a3b8; line-height: 1.5; }
-    .loading { text-align: center; color: #94a3b8; margin-top: 12px; display: none; }
-  </style>
-</head>
-<body>
-  <h1>📱 Buat Barcode Absensi</h1>
-  <p class="sub">Isi nama lengkap → dapat barcode unik</p>
-
-  <div class="card">
-    <label>Nama Lengkap</label>
-    <input type="text" id="nama" placeholder="Contoh: Sintia Rahmawati" autocomplete="off">
-    <button id="btnBuat" onclick="buatBarcode()">Buat Barcode Saya</button>
-    <div class="loading" id="loading">Sedang membuat...</div>
-
-    <div id="hasil">
-      <div class="nama-hasil" id="namaTampil"></div>
-      <div class="id-kecil" id="idTampil"></div>
-      <div id="barcode-container">
-        <svg id="barcode"></svg>
-      </div>
-      <p class="petunjuk">
-        Screenshot barcode ini.<br>
-        Tunjukkan ke admin setiap hari untuk di-scan.
-      </p>
-    </div>
-  </div>
-
-  <script>
-    // Firebase dari BolaPredik
-    const firebaseConfig = {
-      apiKey: "AIzaSyAzJ6p_stDYeaviIK1CapIpz_pc8onN5hM",
-      authDomain: "spaceman-sukses.firebaseapp.com",
-      projectId: "spaceman-sukses",
-      storageBucket: "spaceman-sukses.firebasestorage.app",
-      messagingSenderId: "442967300277",
-      appId: "1:442967300277:web:65b99aebdbc478455586fc"
-    };
-
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    async function buatBarcode() {
-      const nama = document.getElementById('nama').value.trim().toUpperCase();
-      if (!nama || nama.length < 3) {
-        alert('Nama lengkap minimal 3 huruf!');
-        return;
-      }
-
-      const btn = document.getElementById('btnBuat');
-      const loading = document.getElementById('loading');
-      btn.disabled = true;
-      loading.style.display = 'block';
-
-      try {
-        // Cek apakah nama sudah pernah didaftarkan
-        const snapshot = await db.collection('siswa')
-          .where('nama', '==', nama)
-          .limit(1)
-          .get();
-
-        let id, namaFinal;
-
-        if (!snapshot.empty) {
-          // Sudah ada → pakai ID lama
-          const doc = snapshot.docs[0];
-          id = doc.id;
-          namaFinal = doc.data().nama;
-        } else {
-          // Buat ID unik baru
-          id = 'S' + Date.now().toString().slice(-8) + Math.floor(Math.random() * 90 + 10);
-          
-          await db.collection('siswa').doc(id).set({
-            nama: nama,
-            dibuat: firebase.firestore.FieldValue.serverTimestamp()
-          });
-          namaFinal = nama;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi Siswa - Daftar & Barcode</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #e8f0fe 0%, #f5f7fa 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
         }
 
-        // Tampilkan barcode
-        document.getElementById('hasil').style.display = 'block';
-        document.getElementById('namaTampil').textContent = namaFinal;
-        document.getElementById('idTampil').textContent = 'ID: ' + id;
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+        }
 
-        JsBarcode("#barcode", id, {
-          format: "CODE128",
-          width: 2.2,
-          height: 90,
-          displayValue: true,
-          fontSize: 16,
-          margin: 10
-        });
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .header .logo {
+            font-size: 48px;
+        }
+        .header h1 {
+            color: #1a237e;
+            font-size: 24px;
+            margin-top: 5px;
+        }
+        .header h1 span {
+            color: #ffd54f;
+        }
+        .header p {
+            color: #888;
+            font-size: 14px;
+            margin-top: 5px;
+        }
 
-      } catch (err) {
-        console.error(err);
-        alert('Gagal terhubung ke Firebase.\n' + err.message);
-      }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .form-group label .required {
+            color: #e53935;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: 0.3s;
+            background: #fafafa;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #1a237e;
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(26, 35, 126, 0.1);
+        }
 
-      btn.disabled = false;
-      loading.style.display = 'none';
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1a237e, #283593);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(26, 35, 126, 0.3);
+        }
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .barcode-section {
+            margin-top: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            text-align: center;
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+        .barcode-section.show {
+            display: block;
+        }
+        .barcode-section svg {
+            max-width: 250px;
+            height: auto;
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .barcode-section .name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a237e;
+            margin-top: 10px;
+        }
+        .barcode-section .nis {
+            color: #888;
+            font-size: 14px;
+        }
+        .barcode-section .kelas {
+            color: #666;
+            font-size: 14px;
+            margin-top: 2px;
+        }
+        .barcode-section .success {
+            color: #43a047;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .btn-print {
+            margin-top: 12px;
+            padding: 10px 30px;
+            background: #43a047;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-print:hover {
+            background: #388e3c;
+            transform: scale(1.02);
+        }
+
+        .btn-cetak-ulang {
+            margin-top: 8px;
+            padding: 8px 20px;
+            background: #1a237e;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 13px;
+        }
+        .btn-cetak-ulang:hover {
+            background: #283593;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border-left: 4px solid #1a237e;
+        }
+        .info-box p {
+            font-size: 13px;
+            color: #333;
+        }
+        .info-box strong {
+            color: #1a237e;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            z-index: 9999;
+            animation: slideUp 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            max-width: 90%;
+            text-align: center;
+        }
+        .toast.success { background: #2e7d32; color: #fff; }
+        .toast.error { background: #c62828; color: #fff; }
+        .toast.info { background: #0d47a1; color: #fff; }
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .container { padding: 20px; }
+            .header h1 { font-size: 20px; }
+            .barcode-section svg { max-width: 180px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <div class="logo">📚</div>
+        <h1>Absensi <span>Siswa</span></h1>
+        <p>Daftar dan dapatkan barcode untuk absen</p>
+    </div>
+
+    <!-- Form Pendaftaran -->
+    <form id="formSiswa" onsubmit="return false;">
+        <div class="form-group">
+            <label>NIS <span class="required">*</span></label>
+            <input type="text" id="nis" placeholder="Masukkan NIS (contoh: 2024001)" required maxlength="20">
+        </div>
+        <div class="form-group">
+            <label>Nama Lengkap <span class="required">*</span></label>
+            <input type="text" id="nama" placeholder="Masukkan nama lengkap" required>
+        </div>
+        <div class="form-group">
+            <label>Kelas <span class="required">*</span></label>
+            <select id="kelas">
+                <option value="X-1">X-1</option>
+                <option value="X-2">X-2</option>
+                <option value="X-3">X-3</option>
+                <option value="XI-1">XI-1</option>
+                <option value="XI-2">XI-2</option>
+                <option value="XI-3">XI-3</option>
+                <option value="XII-1">XII-1</option>
+                <option value="XII-2">XII-2</option>
+                <option value="XII-3">XII-3</option>
+            </select>
+        </div>
+        <button class="btn-primary" id="btnDaftar" onclick="daftarSiswa()">
+            📝 Daftar & Buat Barcode
+        </button>
+    </form>
+
+    <!-- Barcode Section -->
+    <div class="barcode-section" id="barcodeSection">
+        <div style="font-size:36px;margin-bottom:5px;">✅</div>
+        <div style="color:#43a047;font-weight:700;font-size:18px;">Pendaftaran Berhasil!</div>
+        <div style="margin:15px 0;">
+            <svg id="barcode"></svg>
+        </div>
+        <div class="name" id="displayNama">-</div>
+        <div class="nis" id="displayNis">NIS: -</div>
+        <div class="kelas" id="displayKelas">Kelas: -</div>
+        <div class="success">✨ Simpan barcode ini untuk absen</div>
+        <button class="btn-print" onclick="cetakBarcode()">🖨️ Cetak Barcode</button>
+        <br>
+        <button class="btn-cetak-ulang" onclick="resetForm()">🔄 Daftar Siswa Lain</button>
+    </div>
+
+    <!-- Info -->
+    <div class="info-box">
+        <p>📌 <strong>Cara Absen:</strong></p>
+        <p>1. Daftar di sini untuk mendapatkan barcode</p>
+        <p>2. Simpan atau cetak barcode Anda</p>
+        <p>3. Tunjukkan barcode ke admin untuk scan</p>
+        <p>4. Admin akan mencatat kehadiran Anda</p>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// FIREBASE CONFIG
+// ============================================================
+const firebaseConfig = {
+    apiKey: "AIzaSyAzJ6p_stDYeaviIK1CapIpz_pc8onN5hM",
+    authDomain: "spaceman-sukses.firebaseapp.com",
+    projectId: "spaceman-sukses",
+    storageBucket: "spaceman-sukses.firebasestorage.app",
+    messagingSenderId: "442967300277",
+    appId: "1:442967300277:web:65b99aebdbc478455586fc"
+};
+
+let db;
+try {
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    console.log('✅ Firebase connected');
+} catch(e) {
+    console.error('❌ Firebase error:', e);
+    showToast('❌ Gagal koneksi ke database', 'error');
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let isProcessing = false;
+
+// ============================================================
+// DAFTAR SISWA
+// ============================================================
+async function daftarSiswa() {
+    if (isProcessing) return;
+    
+    const nis = document.getElementById('nis').value.trim();
+    const nama = document.getElementById('nama').value.trim();
+    const kelas = document.getElementById('kelas').value;
+    
+    // Validasi
+    if (!nis) {
+        showToast('⚠️ NIS harus diisi', 'error');
+        document.getElementById('nis').focus();
+        return;
     }
-  </script>
+    if (nis.length < 3) {
+        showToast('⚠️ NIS minimal 3 karakter', 'error');
+        document.getElementById('nis').focus();
+        return;
+    }
+    if (!nama) {
+        showToast('⚠️ Nama harus diisi', 'error');
+        document.getElementById('nama').focus();
+        return;
+    }
+    if (nama.length < 2) {
+        showToast('⚠️ Nama minimal 2 karakter', 'error');
+        document.getElementById('nama').focus();
+        return;
+    }
+    
+    isProcessing = true;
+    const btn = document.getElementById('btnDaftar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span> Memproses...';
+    
+    try {
+        // Cek apakah NIS sudah terdaftar
+        const snapshot = await db.collection('siswa').where('nis', '==', nis).get();
+        if (!snapshot.empty) {
+            showToast('❌ NIS sudah terdaftar! Gunakan NIS lain', 'error');
+            isProcessing = false;
+            btn.disabled = false;
+            btn.innerHTML = '📝 Daftar & Buat Barcode';
+            document.getElementById('nis').focus();
+            document.getElementById('nis').select();
+            return;
+        }
+        
+        // Simpan ke Firebase
+        await db.collection('siswa').add({
+            nis: nis,
+            nama: nama,
+            kelas: kelas,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Tampilkan barcode
+        tampilkanBarcode(nis, nama, kelas);
+        
+        showToast('✅ Pendaftaran berhasil! Barcode siap digunakan', 'success');
+        
+        // Reset form
+        document.getElementById('nis').value = '';
+        document.getElementById('nama').value = '';
+        
+    } catch(e) {
+        console.error('Daftar error:', e);
+        showToast('❌ Gagal daftar: ' + e.message, 'error');
+    } finally {
+        isProcessing = false;
+        btn.disabled = false;
+        btn.innerHTML = '📝 Daftar & Buat Barcode';
+    }
+}
+
+// ============================================================
+// TAMPILKAN BARCODE
+// ============================================================
+function tampilkanBarcode(nis, nama, kelas) {
+    const section = document.getElementById('barcodeSection');
+    section.classList.add('show');
+    
+    // Generate barcode
+    try {
+        JsBarcode("#barcode", nis, {
+            format: "CODE128",
+            width: 2,
+            height: 80,
+            displayValue: true,
+            fontSize: 16,
+            background: "#ffffff",
+            lineColor: "#1a237e",
+            margin: 10
+        });
+    } catch(e) {
+        console.warn('Barcode error:', e);
+        // Fallback: tampilkan text
+        document.getElementById('barcode').innerHTML = `
+            <div style="font-size:40px;font-weight:700;color:#1a237e;padding:20px;">${nis}</div>
+            <div style="font-size:14px;color:#888;">Kode: ${nis}</div>
+        `;
+    }
+    
+    // Tampilkan data
+    document.getElementById('displayNama').textContent = nama;
+    document.getElementById('displayNis').textContent = 'NIS: ' + nis;
+    document.getElementById('displayKelas').textContent = 'Kelas: ' + kelas;
+    
+    // Scroll ke barcode
+    setTimeout(() => {
+        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+}
+
+// ============================================================
+// CETAK BARCODE
+// ============================================================
+function cetakBarcode() {
+    const section = document.getElementById('barcodeSection');
+    const content = section.innerHTML;
+    
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Cetak Barcode</title>
+            <style>
+                body { 
+                    font-family: 'Segoe UI', sans-serif; 
+                    display: flex; 
+                    justify-content: center; 
+                    align-items: center; 
+                    min-height: 100vh;
+                    margin: 0;
+                    padding: 20px;
+                    background: #fff;
+                }
+                .barcode-print {
+                    text-align: center;
+                    padding: 30px;
+                    border: 2px dashed #ddd;
+                    border-radius: 12px;
+                    max-width: 350px;
+                }
+                .barcode-print svg { max-width: 250px; height: auto; }
+                .barcode-print .name { font-size: 22px; font-weight: 700; color: #1a237e; margin-top: 10px; }
+                .barcode-print .nis { color: #888; font-size: 14px; }
+                .barcode-print .kelas { color: #666; font-size: 14px; }
+                .barcode-print .header { font-size: 16px; color: #1a237e; margin-bottom: 15px; }
+                .barcode-print .footer { font-size: 12px; color: #999; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="barcode-print">
+                <div class="header">📚 KARTU ABSENSI</div>
+                ${document.querySelector('#barcode').outerHTML}
+                <div class="name">${document.getElementById('displayNama').textContent}</div>
+                <div class="nis">${document.getElementById('displayNis').textContent}</div>
+                <div class="kelas">${document.getElementById('displayKelas').textContent}</div>
+                <div class="footer">Scan barcode untuk absen</div>
+            </div>
+            <script>
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                    }, 500);
+                };
+            <\/script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+// ============================================================
+// RESET FORM
+// ============================================================
+function resetForm() {
+    document.getElementById('barcodeSection').classList.remove('show');
+    document.getElementById('nis').value = '';
+    document.getElementById('nama').value = '';
+    document.getElementById('nis').focus();
+    showToast('🔄 Siap daftar siswa baru', 'info');
+}
+
+// ============================================================
+// TOAST NOTIFICATION
+// ============================================================
+function showToast(message, type = 'info') {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
+// ============================================================
+// KEYBOARD SHORTCUT
+// ============================================================
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        const active = document.activeElement;
+        if (active.id === 'nis' || active.id === 'nama') {
+            daftarSiswa();
+        }
+    }
+    if (e.key === 'Escape') {
+        if (document.getElementById('barcodeSection').classList.contains('show')) {
+            resetForm();
+        }
+    }
+});
+
+// Auto focus NIS
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('nis').focus();
+});
+
+console.log('📚 Siswa Panel Loaded!');
+</script>
 </body>
 </html>
