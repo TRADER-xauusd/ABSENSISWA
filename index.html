@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 500px;
+            max-width: 480px;
             width: 100%;
             background: #fff;
             border-radius: 20px;
@@ -122,14 +122,15 @@
             border-radius: 8px;
         }
         .barcode-section .name {
-            font-size: 20px;
+            font-size: 22px;
             font-weight: 700;
             color: #1a237e;
             margin-top: 10px;
         }
-        .barcode-section .nis {
+        .barcode-section .uid {
             color: #888;
-            font-size: 14px;
+            font-size: 13px;
+            margin-top: 2px;
         }
         .barcode-section .kelas {
             color: #666;
@@ -184,6 +185,7 @@
         .info-box p {
             font-size: 13px;
             color: #333;
+            margin: 3px 0;
         }
         .info-box strong {
             color: #1a237e;
@@ -232,6 +234,18 @@
             to { transform: translateX(-50%) translateY(0); opacity: 1; }
         }
 
+        .uid-display {
+            font-size: 14px;
+            background: #1a237e;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-top: 5px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+        }
+
         /* Responsive */
         @media (max-width: 480px) {
             .container { padding: 20px; }
@@ -247,15 +261,11 @@
     <div class="header">
         <div class="logo">📚</div>
         <h1>Absensi <span>Siswa</span></h1>
-        <p>Daftar dan dapatkan barcode untuk absen</p>
+        <p>Daftar dan dapatkan barcode unik</p>
     </div>
 
     <!-- Form Pendaftaran -->
     <form id="formSiswa" onsubmit="return false;">
-        <div class="form-group">
-            <label>NIS <span class="required">*</span></label>
-            <input type="text" id="nis" placeholder="Masukkan NIS (contoh: 2024001)" required maxlength="20">
-        </div>
         <div class="form-group">
             <label>Nama Lengkap <span class="required">*</span></label>
             <input type="text" id="nama" placeholder="Masukkan nama lengkap" required>
@@ -287,7 +297,7 @@
             <svg id="barcode"></svg>
         </div>
         <div class="name" id="displayNama">-</div>
-        <div class="nis" id="displayNis">NIS: -</div>
+        <div class="uid-display" id="displayUID">UID: -</div>
         <div class="kelas" id="displayKelas">Kelas: -</div>
         <div class="success">✨ Simpan barcode ini untuk absen</div>
         <button class="btn-print" onclick="cetakBarcode()">🖨️ Cetak Barcode</button>
@@ -298,10 +308,10 @@
     <!-- Info -->
     <div class="info-box">
         <p>📌 <strong>Cara Absen:</strong></p>
-        <p>1. Daftar di sini untuk mendapatkan barcode</p>
-        <p>2. Simpan atau cetak barcode Anda</p>
-        <p>3. Tunjukkan barcode ke admin untuk scan</p>
-        <p>4. Admin akan mencatat kehadiran Anda</p>
+        <p>1. Daftar di sini dengan nama</p>
+        <p>2. Dapatkan barcode unik Anda</p>
+        <p>3. Simpan atau cetak barcode</p>
+        <p>4. Tunjukkan ke admin untuk scan</p>
     </div>
 </div>
 
@@ -334,26 +344,28 @@ try {
 let isProcessing = false;
 
 // ============================================================
+// GENERATE UID UNIK
+// ============================================================
+function generateUID() {
+    // Generate 8 digit alphanumeric
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let uid = '';
+    for (let i = 0; i < 8; i++) {
+        uid += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return uid;
+}
+
+// ============================================================
 // DAFTAR SISWA
 // ============================================================
 async function daftarSiswa() {
     if (isProcessing) return;
     
-    const nis = document.getElementById('nis').value.trim();
     const nama = document.getElementById('nama').value.trim();
     const kelas = document.getElementById('kelas').value;
     
     // Validasi
-    if (!nis) {
-        showToast('⚠️ NIS harus diisi', 'error');
-        document.getElementById('nis').focus();
-        return;
-    }
-    if (nis.length < 3) {
-        showToast('⚠️ NIS minimal 3 karakter', 'error');
-        document.getElementById('nis').focus();
-        return;
-    }
     if (!nama) {
         showToast('⚠️ Nama harus diisi', 'error');
         document.getElementById('nama').focus();
@@ -371,33 +383,43 @@ async function daftarSiswa() {
     btn.innerHTML = '<span class="loading-spinner"></span> Memproses...';
     
     try {
-        // Cek apakah NIS sudah terdaftar
-        const snapshot = await db.collection('siswa').where('nis', '==', nis).get();
-        if (!snapshot.empty) {
-            showToast('❌ NIS sudah terdaftar! Gunakan NIS lain', 'error');
+        // Generate UID unik (cek duplikat)
+        let uid = generateUID();
+        let isUnique = false;
+        let attempts = 0;
+        
+        while (!isUnique && attempts < 10) {
+            const snapshot = await db.collection('siswa').where('uid', '==', uid).get();
+            if (snapshot.empty) {
+                isUnique = true;
+            } else {
+                uid = generateUID();
+                attempts++;
+            }
+        }
+        
+        if (!isUnique) {
+            showToast('❌ Gagal generate UID unik, coba lagi', 'error');
             isProcessing = false;
             btn.disabled = false;
             btn.innerHTML = '📝 Daftar & Buat Barcode';
-            document.getElementById('nis').focus();
-            document.getElementById('nis').select();
             return;
         }
         
         // Simpan ke Firebase
         await db.collection('siswa').add({
-            nis: nis,
+            uid: uid,
             nama: nama,
             kelas: kelas,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
         // Tampilkan barcode
-        tampilkanBarcode(nis, nama, kelas);
+        tampilkanBarcode(uid, nama, kelas);
         
         showToast('✅ Pendaftaran berhasil! Barcode siap digunakan', 'success');
         
         // Reset form
-        document.getElementById('nis').value = '';
         document.getElementById('nama').value = '';
         
     } catch(e) {
@@ -413,13 +435,13 @@ async function daftarSiswa() {
 // ============================================================
 // TAMPILKAN BARCODE
 // ============================================================
-function tampilkanBarcode(nis, nama, kelas) {
+function tampilkanBarcode(uid, nama, kelas) {
     const section = document.getElementById('barcodeSection');
     section.classList.add('show');
     
     // Generate barcode
     try {
-        JsBarcode("#barcode", nis, {
+        JsBarcode("#barcode", uid, {
             format: "CODE128",
             width: 2,
             height: 80,
@@ -431,16 +453,15 @@ function tampilkanBarcode(nis, nama, kelas) {
         });
     } catch(e) {
         console.warn('Barcode error:', e);
-        // Fallback: tampilkan text
         document.getElementById('barcode').innerHTML = `
-            <div style="font-size:40px;font-weight:700;color:#1a237e;padding:20px;">${nis}</div>
-            <div style="font-size:14px;color:#888;">Kode: ${nis}</div>
+            <div style="font-size:40px;font-weight:700;color:#1a237e;padding:20px;">${uid}</div>
+            <div style="font-size:14px;color:#888;">Kode: ${uid}</div>
         `;
     }
     
     // Tampilkan data
     document.getElementById('displayNama').textContent = nama;
-    document.getElementById('displayNis').textContent = 'NIS: ' + nis;
+    document.getElementById('displayUID').textContent = 'UID: ' + uid;
     document.getElementById('displayKelas').textContent = 'Kelas: ' + kelas;
     
     // Scroll ke barcode
@@ -453,9 +474,6 @@ function tampilkanBarcode(nis, nama, kelas) {
 // CETAK BARCODE
 // ============================================================
 function cetakBarcode() {
-    const section = document.getElementById('barcodeSection');
-    const content = section.innerHTML;
-    
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     printWindow.document.write(`
         <!DOCTYPE html>
@@ -482,7 +500,17 @@ function cetakBarcode() {
                 }
                 .barcode-print svg { max-width: 250px; height: auto; }
                 .barcode-print .name { font-size: 22px; font-weight: 700; color: #1a237e; margin-top: 10px; }
-                .barcode-print .nis { color: #888; font-size: 14px; }
+                .barcode-print .uid { 
+                    font-size: 14px; 
+                    background: #1a237e; 
+                    color: #fff; 
+                    padding: 4px 12px; 
+                    border-radius: 6px;
+                    display: inline-block;
+                    margin-top: 5px;
+                    font-family: 'Courier New', monospace;
+                    letter-spacing: 2px;
+                }
                 .barcode-print .kelas { color: #666; font-size: 14px; }
                 .barcode-print .header { font-size: 16px; color: #1a237e; margin-bottom: 15px; }
                 .barcode-print .footer { font-size: 12px; color: #999; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; }
@@ -493,7 +521,7 @@ function cetakBarcode() {
                 <div class="header">📚 KARTU ABSENSI</div>
                 ${document.querySelector('#barcode').outerHTML}
                 <div class="name">${document.getElementById('displayNama').textContent}</div>
-                <div class="nis">${document.getElementById('displayNis').textContent}</div>
+                <div class="uid">${document.getElementById('displayUID').textContent}</div>
                 <div class="kelas">${document.getElementById('displayKelas').textContent}</div>
                 <div class="footer">Scan barcode untuk absen</div>
             </div>
@@ -515,9 +543,8 @@ function cetakBarcode() {
 // ============================================================
 function resetForm() {
     document.getElementById('barcodeSection').classList.remove('show');
-    document.getElementById('nis').value = '';
     document.getElementById('nama').value = '';
-    document.getElementById('nis').focus();
+    document.getElementById('nama').focus();
     showToast('🔄 Siap daftar siswa baru', 'info');
 }
 
@@ -539,8 +566,7 @@ function showToast(message, type = 'info') {
 // ============================================================
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-        const active = document.activeElement;
-        if (active.id === 'nis' || active.id === 'nama') {
+        if (document.activeElement === document.getElementById('nama')) {
             daftarSiswa();
         }
     }
@@ -551,9 +577,9 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Auto focus NIS
+// Auto focus
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('nis').focus();
+    document.getElementById('nama').focus();
 });
 
 console.log('📚 Siswa Panel Loaded!');
