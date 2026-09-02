@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Absensi Siswa - Buat Barcode</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 6px; color: #38bdf8; text-align: center; }
+    .sub { color: #94a3b8; font-size: 0.9rem; margin-bottom: 24px; text-align: center; }
+    .card {
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    label { display: block; margin-bottom: 8px; font-weight: 600; }
+    input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 2px solid #334155;
+      background: #0f172a;
+      color: white;
+      font-size: 1.05rem;
+      margin-bottom: 18px;
+      outline: none;
+    }
+    input:focus { border-color: #0ea5e9; }
+    button {
+      width: 100%;
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    #hasil { display: none; margin-top: 28px; text-align: center; }
+    .nama-hasil { font-size: 1.3rem; font-weight: 700; color: #4ade80; margin-bottom: 4px; }
+    .id-kecil { font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
+    #barcode-container { background: white; padding: 16px; border-radius: 12px; display: inline-block; }
+    .petunjuk { margin-top: 16px; font-size: 0.9rem; color: #94a3b8; line-height: 1.5; }
+    .loading { text-align: center; color: #94a3b8; margin-top: 12px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>📱 Buat Barcode Absensi</h1>
+  <p class="sub">Isi nama lengkap → dapat barcode unik</p>
+
+  <div class="card">
+    <label>Nama Lengkap</label>
+    <input type="text" id="nama" placeholder="Contoh: Sintia Rahmawati" autocomplete="off">
+    <button id="btnBuat" onclick="buatBarcode()">Buat Barcode Saya</button>
+    <div class="loading" id="loading">Sedang membuat...</div>
+
+    <div id="hasil">
+      <div class="nama-hasil" id="namaTampil"></div>
+      <div class="id-kecil" id="idTampil"></div>
+      <div id="barcode-container">
+        <svg id="barcode"></svg>
+      </div>
+      <p class="petunjuk">
+        Screenshot barcode ini.<br>
+        Tunjukkan ke admin setiap hari untuk di-scan.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // Firebase dari BolaPredik
+    const firebaseConfig = {
+      apiKey: "AIzaSyAzJ6p_stDYeaviIK1CapIpz_pc8onN5hM",
+      authDomain: "spaceman-sukses.firebaseapp.com",
+      projectId: "spaceman-sukses",
+      storageBucket: "spaceman-sukses.firebasestorage.app",
+      messagingSenderId: "442967300277",
+      appId: "1:442967300277:web:65b99aebdbc478455586fc"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    async function buatBarcode() {
+      const nama = document.getElementById('nama').value.trim().toUpperCase();
+      if (!nama || nama.length < 3) {
+        alert('Nama lengkap minimal 3 huruf!');
+        return;
+      }
+
+      const btn = document.getElementById('btnBuat');
+      const loading = document.getElementById('loading');
+      btn.disabled = true;
+      loading.style.display = 'block';
+
+      try {
+        // Cek apakah nama sudah pernah didaftarkan
+        const snapshot = await db.collection('siswa')
+          .where('nama', '==', nama)
+          .limit(1)
+          .get();
+
+        let id, namaFinal;
+
+        if (!snapshot.empty) {
+          // Sudah ada → pakai ID lama
+          const doc = snapshot.docs[0];
+          id = doc.id;
+          namaFinal = doc.data().nama;
+        } else {
+          // Buat ID unik baru
+          id = 'S' + Date.now().toString().slice(-8) + Math.floor(Math.random() * 90 + 10);
+          
+          await db.collection('siswa').doc(id).set({
+            nama: nama,
+            dibuat: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          namaFinal = nama;
+        }
+
+        // Tampilkan barcode
+        document.getElementById('hasil').style.display = 'block';
+        document.getElementById('namaTampil').textContent = namaFinal;
+        document.getElementById('idTampil').textContent = 'ID: ' + id;
+
+        JsBarcode("#barcode", id, {
+          format: "CODE128",
+          width: 2.2,
+          height: 90,
+          displayValue: true,
+          fontSize: 16,
+          margin: 10
+        });
+
+      } catch (err) {
+        console.error(err);
+        alert('Gagal terhubung ke Firebase.\n' + err.message);
+      }
+
+      btn.disabled = false;
+      loading.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
