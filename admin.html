@@ -324,6 +324,7 @@
         .big-notification .name { font-size: 32px; font-weight: 700; color: #1a237e; }
         .big-notification .status-text { font-size: 24px; font-weight: 600; margin: 10px 0; }
         .big-notification .waktu { font-size: 18px; color: #666; }
+        .big-notification .uid { font-size: 14px; color: #999; margin-top: 5px; }
         .big-notification .sub { font-size: 14px; color: #999; margin-top: 15px; }
 
         @keyframes popIn {
@@ -374,18 +375,6 @@
             transition: 0.3s;
         }
         .btn-danger:hover { background: #c62828; }
-
-        .btn-edit {
-            padding: 6px 14px;
-            background: #1a237e;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: 0.3s;
-        }
-        .btn-edit:hover { background: #283593; }
 
         .last-absen-box {
             background: #f8f9fa;
@@ -465,9 +454,9 @@
                     <button class="btn-scan" id="btnScan" onclick="toggleScanner()">📷 Start Scan</button>
                     
                     <div style="margin-top:15px;border-top:1px solid rgba(255,255,255,0.1);padding-top:15px;">
-                        <p style="color:#aaa;font-size:13px;">Atau input manual:</p>
+                        <p style="color:#aaa;font-size:13px;">Atau input manual (UID):</p>
                         <div class="manual-input">
-                            <input type="text" id="manualNIS" placeholder="Masukkan NIS" maxlength="20">
+                            <input type="text" id="manualUID" placeholder="Masukkan UID" maxlength="20">
                             <button onclick="manualAbsen()">✅ Absen</button>
                         </div>
                         <div class="status-buttons" id="statusButtons" style="display:none;">
@@ -500,7 +489,7 @@
                     <thead>
                         <tr>
                             <th>No</th>
-                            <th>NIS</th>
+                            <th>UID</th>
                             <th>Nama</th>
                             <th>Kelas</th>
                             <th>Jam</th>
@@ -518,7 +507,7 @@
         <!-- TAB: SISWA -->
         <div class="tab-content" id="tabSiswa">
             <div class="search-box">
-                <input type="text" id="searchSiswa" placeholder="Cari nama atau NIS..." onkeyup="filterSiswa()">
+                <input type="text" id="searchSiswa" placeholder="Cari nama atau UID..." onkeyup="filterSiswa()">
                 <button onclick="filterSiswa()">🔍 Cari</button>
                 <button onclick="document.getElementById('searchSiswa').value='';filterSiswa();">✕ Reset</button>
             </div>
@@ -527,7 +516,7 @@
                     <thead>
                         <tr>
                             <th>No</th>
-                            <th>NIS</th>
+                            <th>UID</th>
                             <th>Nama</th>
                             <th>Kelas</th>
                             <th>Status Hari Ini</th>
@@ -555,7 +544,7 @@
                     <thead>
                         <tr>
                             <th>No</th>
-                            <th>NIS</th>
+                            <th>UID</th>
                             <th>Nama</th>
                             <th>Kelas</th>
                             <th>Tanggal</th>
@@ -602,8 +591,7 @@ let siswaList = [];
 let absenHariIni = [];
 let isScanning = false;
 let stream = null;
-let selectedNIS = null;
-let manualNIS = null;
+let selectedUID = null;
 
 // ============================================================
 // INIT
@@ -649,11 +637,11 @@ function renderSiswa(data) {
     }
     let html = '';
     data.forEach((s, i) => {
-        const status = getStatusSiswa(s.nis);
+        const status = getStatusSiswa(s.uid);
         html += `
             <tr>
                 <td>${i + 1}</td>
-                <td><strong>${s.nis}</strong></td>
+                <td><strong>${s.uid}</strong></td>
                 <td>${s.nama}</td>
                 <td>${s.kelas || '-'}</td>
                 <td>${status}</td>
@@ -671,13 +659,13 @@ function filterSiswa() {
     if (!search) { renderSiswa(siswaList); return; }
     const filtered = siswaList.filter(s => 
         s.nama.toLowerCase().includes(search) || 
-        s.nis.includes(search)
+        (s.uid && s.uid.toLowerCase().includes(search))
     );
     renderSiswa(filtered);
 }
 
-function getStatusSiswa(nis) {
-    const absen = absenHariIni.find(a => a.nis === nis);
+function getStatusSiswa(uid) {
+    const absen = absenHariIni.find(a => a.uid === uid);
     if (!absen) {
         return `<span class="badge alfa">⏳ Belum</span>`;
     }
@@ -744,7 +732,7 @@ function renderAbsenHariIni() {
         html += `
             <tr>
                 <td>${i + 1}</td>
-                <td><strong>${a.nis}</strong></td>
+                <td><strong>${a.uid}</strong></td>
                 <td>${a.nama}</td>
                 <td>${a.kelas || '-'}</td>
                 <td>${a.waktu || '-'}</td>
@@ -782,7 +770,7 @@ function updateLastAbsen() {
     container.innerHTML = `
         <div style="background:#f8f9fa;padding:15px;border-radius:8px;border-left:4px solid ${colorMap[last.status] || '#1a237e'};">
             <div style="font-size:20px;font-weight:700;color:#1a237e;">${last.nama}</div>
-            <div style="color:#666;">NIS: ${last.nis} | Kelas: ${last.kelas || '-'}</div>
+            <div style="color:#666;">UID: ${last.uid} | Kelas: ${last.kelas || '-'}</div>
             <div style="color:${colorMap[last.status] || '#1a237e'};font-weight:600;margin-top:5px;font-size:16px;">
                 ${statusMap[last.status] || last.status} - ${last.waktu || ''}
             </div>
@@ -830,7 +818,8 @@ async function toggleScanner() {
         status.className = 'status info';
         status.textContent = '📷 Arahkan ke barcode...';
         
-        startScanning(video, status);
+        // Simulasi scan - fokus ke input manual
+        document.getElementById('manualUID').focus();
     } catch(e) {
         status.className = 'status error';
         status.textContent = '❌ Gagal akses kamera: ' + e.message;
@@ -838,63 +827,50 @@ async function toggleScanner() {
     }
 }
 
-function startScanning(video, status) {
-    // Simulasi scan - karena library barcode butuh tambahan, kita gunakan input manual
-    // Tapi kita buat simulasi scan dengan interval
-    status.textContent = '📷 Arahkan kamera ke barcode siswa';
-    
-    // Untuk demo, kita akan monitor input manual
-    const manualInput = document.getElementById('manualNIS');
-    manualInput.focus();
-    
-    // Tambahkan event listener untuk scan otomatis
-    // Dalam implementasi nyata, bisa pakai QuaggaJS atau ZXing
-}
-
 // ============================================================
 // MANUAL ABSEN
 // ============================================================
 function manualAbsen() {
-    const nis = document.getElementById('manualNIS').value.trim();
-    if (!nis) {
-        showToast('⚠️ Masukkan NIS', 'error');
+    const uid = document.getElementById('manualUID').value.trim().toUpperCase();
+    if (!uid) {
+        showToast('⚠️ Masukkan UID', 'error');
         return;
     }
     
     // Cari siswa
-    const siswa = siswaList.find(s => s.nis === nis);
+    const siswa = siswaList.find(s => s.uid === uid);
     if (!siswa) {
-        showToast('❌ Siswa dengan NIS ' + nis + ' tidak ditemukan', 'error');
+        showToast('❌ Siswa dengan UID ' + uid + ' tidak ditemukan', 'error');
+        document.getElementById('manualUID').value = '';
         return;
     }
     
     // Cek sudah absen
-    const sudahAbsen = absenHariIni.find(a => a.nis === nis);
+    const sudahAbsen = absenHariIni.find(a => a.uid === uid);
     if (sudahAbsen) {
         showToast('⚠️ ' + siswa.nama + ' sudah absen pukul ' + sudahAbsen.waktu, 'error');
-        document.getElementById('manualNIS').value = '';
+        document.getElementById('manualUID').value = '';
         return;
     }
     
     // Tampilkan pilihan status
-    selectedNIS = nis;
+    selectedUID = uid;
     document.getElementById('statusButtons').style.display = 'flex';
     document.getElementById('scanStatus').className = 'status warning';
     document.getElementById('scanStatus').textContent = `📝 Pilih status untuk ${siswa.nama}`;
     
-    // Scroll ke status buttons
     document.getElementById('statusButtons').scrollIntoView({ behavior: 'smooth' });
 }
 
 function absenManual(status) {
-    if (!selectedNIS) return;
-    const siswa = siswaList.find(s => s.nis === selectedNIS);
+    if (!selectedUID) return;
+    const siswa = siswaList.find(s => s.uid === selectedUID);
     if (!siswa) return;
     
     simpanAbsen(siswa, status);
     document.getElementById('statusButtons').style.display = 'none';
-    document.getElementById('manualNIS').value = '';
-    selectedNIS = null;
+    document.getElementById('manualUID').value = '';
+    selectedUID = null;
     document.getElementById('scanStatus').className = 'status info';
     document.getElementById('scanStatus').textContent = '🔍 Siap scan';
 }
@@ -909,7 +885,7 @@ async function simpanAbsen(siswa, status) {
         const tanggal = now.toISOString().split('T')[0];
         
         await db.collection('absen').add({
-            nis: siswa.nis,
+            uid: siswa.uid,
             nama: siswa.nama,
             kelas: siswa.kelas || '-',
             status: status,
@@ -920,12 +896,10 @@ async function simpanAbsen(siswa, status) {
         
         showToast(`✅ ${siswa.nama} ${status.toUpperCase()} pukul ${waktu}`, 'success');
         
-        // Refresh absen
         await loadAbsenHariIni();
-        document.getElementById('manualNIS').value = '';
+        document.getElementById('manualUID').value = '';
         
-        // Tampilkan notifikasi besar
-        showBigNotification(siswa.nama, status, waktu);
+        showBigNotification(siswa.nama, status, waktu, siswa.uid);
         
     } catch(e) {
         console.error('Absen error:', e);
@@ -933,7 +907,7 @@ async function simpanAbsen(siswa, status) {
     }
 }
 
-function showBigNotification(nama, status, waktu) {
+function showBigNotification(nama, status, waktu, uid) {
     const statusMap = {
         'hadir': { label: '✅ HADIR', color: '#43a047', icon: '🎉' },
         'izin': { label: '📝 IZIN', color: '#fb8c00', icon: '📝' },
@@ -954,6 +928,7 @@ function showBigNotification(nama, status, waktu) {
         <div class="name">${nama}</div>
         <div class="status-text" style="color:${info.color}">${info.label}</div>
         <div class="waktu">Pukul ${waktu}</div>
+        <div class="uid">UID: ${uid}</div>
         <div class="sub">⏳ Notifikasi akan hilang otomatis</div>
     `;
     document.body.appendChild(div);
@@ -999,7 +974,7 @@ async function loadHistory() {
             html += `
                 <tr>
                     <td>${i++}</td>
-                    <td><strong>${a.nis}</strong></td>
+                    <td><strong>${a.uid}</strong></td>
                     <td>${a.nama}</td>
                     <td>${a.kelas || '-'}</td>
                     <td>${a.tanggal ? new Date(a.tanggal).toLocaleDateString('id-ID') : '-'}</td>
@@ -1022,7 +997,7 @@ async function loadHistory() {
 async function hapusSiswa(id) {
     const siswa = siswaList.find(s => s.id === id);
     if (!siswa) return;
-    if (!confirm(`Hapus siswa ${siswa.nama} (${siswa.nis})?`)) return;
+    if (!confirm(`Hapus siswa ${siswa.nama} (UID: ${siswa.uid})?`)) return;
     try {
         await db.collection('siswa').doc(id).delete();
         showToast('✅ Siswa dihapus', 'success');
@@ -1044,10 +1019,10 @@ function exportAbsen() {
     text += '='.repeat(60) + '\n';
     text += `Tanggal: ${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}\n`;
     text += '='.repeat(60) + '\n\n';
-    text += 'No\tNIS\tNama\tKelas\tJam\tStatus\n';
+    text += 'No\tUID\tNama\tKelas\tJam\tStatus\n';
     text += '-'.repeat(60) + '\n';
     absenHariIni.forEach((a, i) => {
-        text += `${i+1}\t${a.nis}\t${a.nama}\t${a.kelas}\t${a.waktu}\t${a.status}\n`;
+        text += `${i+1}\t${a.uid}\t${a.nama}\t${a.kelas}\t${a.waktu}\t${a.status}\n`;
     });
     text += '\n' + '='.repeat(60) + '\n';
     const hadir = absenHariIni.filter(a => a.status === 'hadir').length;
@@ -1091,7 +1066,6 @@ function showToast(message, type = 'info') {
 // ============================================================
 // REAL-TIME LISTENERS
 // ============================================================
-// Listen for new absen
 db.collection('absen')
     .where('tanggal', '==', new Date().toISOString().split('T')[0])
     .orderBy('waktu', 'desc')
@@ -1108,15 +1082,15 @@ db.collection('siswa').onSnapshot(() => {
 // ============================================================
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-        if (document.activeElement === document.getElementById('manualNIS')) {
+        if (document.activeElement === document.getElementById('manualUID')) {
             manualAbsen();
         }
     }
     if (e.key === 'Escape') {
         if (isScanning) toggleScanner();
         document.getElementById('statusButtons').style.display = 'none';
-        selectedNIS = null;
-        document.getElementById('manualNIS').value = '';
+        selectedUID = null;
+        document.getElementById('manualUID').value = '';
     }
 });
 
